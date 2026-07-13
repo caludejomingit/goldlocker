@@ -1,0 +1,10 @@
+{
+  "name": "goldlocker-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side scripts run by GitHub Actions — not part of the static app.",
+  "type": "module",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

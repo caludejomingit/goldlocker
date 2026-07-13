@@ -427,6 +427,19 @@ input[type="text"] {
   font-family: 'Public Sans', sans-serif;
 }
 
+.push-code-box {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--card-border);
+  border-radius: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  background: var(--ivory);
+  color: var(--ink);
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
 .premium-row {
   display: flex;
   gap: 8px;

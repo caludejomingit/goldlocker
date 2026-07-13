@@ -250,6 +250,18 @@
         <p class="mono" id="alert-status">No alert set.</p>
       </div>
 
+      <div class="panel">
+        <h2 class="panel-title">Daily 10 AM rate notification</h2>
+        <p class="field-hint">A real push notification with the day's rate, sent every morning around 10 AM IST — works even if Goldlocker isn't open. Needs a one-time setup: subscribing here, then copying a code to whoever maintains this app so it can be registered server-side.</p>
+        <button class="btn-primary btn-block" id="push-subscribe-btn">Enable daily notification</button>
+        <p class="mono" id="push-status">Not subscribed yet.</p>
+        <div id="push-code-wrap" hidden>
+          <label class="field-label" for="push-code">Copy this and send it to whoever maintains Goldlocker (one-time setup)</label>
+          <textarea id="push-code" class="push-code-box" rows="4" readonly></textarea>
+          <button type="button" class="btn-secondary btn-block" id="push-copy-btn">Copy code</button>
+        </div>
+      </div>
+
       <p class="disclaimer">This signal is a simple rule-based heuristic based on recent price range and momentum. It is not financial advice.</p>
     </section>
 

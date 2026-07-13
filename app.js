@@ -31,6 +31,11 @@
     return level === "BUY" ? ICONS.buy : level === "WAIT" ? ICONS.wait : ICONS.hold;
   }
 
+  // Safe to expose client-side — this is the public half of the VAPID
+  // keypair used to sign push messages. The private half only lives in
+  // GitHub Actions secrets, used by scripts/send-daily-notification.mjs.
+  const VAPID_PUBLIC_KEY = "BH8cl-pqcoshrsSsYNdZrxDy6VbxAAnumH3DesNxcUw6gslN95LPqjZqLgkVgvWStgNoN-T4modcO3n6fN762EI";
+
   // Scraped daily by .github/workflows/scrape-rate.yml from a Kerala gold
   // rate aggregator (scripts/scrape-rate.mjs) — real 22K/24K/18K rates, no
   // client-side API calls or manual calibration needed.
@@ -671,6 +676,79 @@
     } catch (e) { /* Notification constructor unsupported in this context (e.g. SW-only browsers) */ }
   }
 
+  // ---------- Daily push notification ----------
+  // True Web Push (fires even if Goldlocker is closed): subscribing here
+  // creates a browser push subscription, which then has to be relayed
+  // out-of-band (copy the code, send it to whoever maintains the app) so it
+  // can be stored as a GitHub Actions secret — a static site has no server
+  // to receive it automatically. .github/workflows/daily-notification.yml
+  // sends to that stored subscription every morning via scripts/send-daily-notification.mjs.
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+
+  async function getPushSubscription() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+    const reg = await navigator.serviceWorker.ready;
+    return reg.pushManager.getSubscription();
+  }
+
+  async function refreshPushUi() {
+    const statusEl = document.getElementById("push-status");
+    const btn = document.getElementById("push-subscribe-btn");
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      statusEl.textContent = "Push notifications aren't supported in this browser.";
+      btn.disabled = true;
+      return;
+    }
+    if (Notification.permission === "denied") {
+      statusEl.textContent = "Notifications are blocked for this site in your browser settings.";
+      return;
+    }
+    const sub = await getPushSubscription().catch(() => null);
+    if (sub) {
+      statusEl.textContent = "Subscribed on this device. If you haven't already sent the setup code, tap the button again to get it.";
+      btn.textContent = "Show setup code again";
+    } else {
+      statusEl.textContent = "Not subscribed yet.";
+      btn.textContent = "Enable daily notification";
+    }
+  }
+
+  async function subscribeToPush() {
+    const statusEl = document.getElementById("push-status");
+    const codeWrap = document.getElementById("push-code-wrap");
+    const codeBox = document.getElementById("push-code");
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        statusEl.textContent = "Push notifications aren't supported in this browser.";
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        statusEl.textContent = "Notification permission was not granted.";
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+      codeBox.value = JSON.stringify(sub);
+      codeWrap.hidden = false;
+      statusEl.textContent = "Subscribed on this device — copy the code below and send it over for one-time setup.";
+    } catch (e) {
+      statusEl.textContent = "Couldn't subscribe: " + (e.message || e);
+    }
+  }
+
   // ---------- Event wiring ----------
 
   function wireTabBar() {
@@ -789,6 +867,22 @@
     });
   }
 
+  function wirePush() {
+    document.getElementById("push-subscribe-btn").addEventListener("click", subscribeToPush);
+    document.getElementById("push-copy-btn").addEventListener("click", async () => {
+      const codeBox = document.getElementById("push-code");
+      codeBox.select();
+      try {
+        await navigator.clipboard.writeText(codeBox.value);
+        const btn = document.getElementById("push-copy-btn");
+        const original = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } catch (e) { /* clipboard permission denied — the code is still selected for manual copy */ }
+    });
+    refreshPushUi();
+  }
+
   function registerServiceWorker() {
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
       navigator.serviceWorker.register("sw.js").catch(() => { /* offline caching unavailable; app still works online */ });
@@ -804,6 +898,7 @@
     wireRefresh();
     wireBookingForm();
     wireAlert();
+    wirePush();
     registerServiceWorker();
 
     refreshData(false);

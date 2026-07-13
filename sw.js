@@ -51,3 +51,30 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { /* non-JSON payload */ }
+  const title = data.title || "Goldlocker";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "Today's gold rate is ready.",
+      icon: "./icon.svg",
+      badge: "./icon.svg",
+      data: { url: data.url || "./" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "./";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});

@@ -1,5 +1,5 @@
-const SHELL_CACHE = "goldlocker-shell-v1";
-const API_CACHE = "goldlocker-api-v1";
+const SHELL_CACHE = "goldlocker-shell-v2";
+const DATA_CACHE = "goldlocker-data-v1";
 
 const SHELL_FILES = [
   "./",
@@ -9,8 +9,6 @@ const SHELL_FILES = [
   "./manifest.json",
   "./icon.svg",
 ];
-
-const API_HOSTS = ["api.gold-api.com", "open.er-api.com"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -23,7 +21,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((k) => k !== SHELL_CACHE && k !== API_CACHE)
+          .filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE)
           .map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())
@@ -32,15 +30,16 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
-  if (API_HOSTS.includes(url.hostname)) {
-    // Network-first so the rate stays fresh; fall back to the last successful
-    // fetch when offline or rate-limited.
+  if (url.pathname.endsWith("/data/kerala-rate.json")) {
+    // Network-first so the daily-scraped rate stays fresh; fall back to the
+    // last successful fetch when offline.
     event.respondWith(
       fetch(event.request)
         .then((res) => {
           const clone = res.clone();
-          caches.open(API_CACHE).then((cache) => cache.put(event.request, clone));
+          caches.open(DATA_CACHE).then((cache) => cache.put(event.request, clone));
           return res;
         })
         .catch(() => caches.match(event.request))
@@ -48,9 +47,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => cached || fetch(event.request))
-    );
-  }
+  event.respondWith(
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
+  );
 });

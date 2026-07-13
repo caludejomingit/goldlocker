@@ -10,23 +10,19 @@
     history: "gl_history_v1",
     bookings: "gl_bookings_v1",
     settings: "gl_settings_v1",
+    meta: "gl_meta_v1",
   };
 
   const CARATS = ["24K", "22K", "18K"];
-  const PURITY = { "24K": 1, "22K": 0.916, "18K": 0.750 };
   const GRAMS_PER_PAVAN = 8;
 
-  // Booking-derived anchor for the 24K base rate, used for synthetic seeding
-  // and as a network-failure fallback: 22K purchase rate (₹13,230/g) / 0.916 purity.
-  const ANCHOR_24K_INR = 13230 / 0.916;
-
-  const XAU_API = "https://api.gold-api.com/price/XAU";
-  const FX_API = "https://open.er-api.com/v6/latest/USD";
-  const OZ_TO_GRAM = 31.1035;
+  // Scraped daily by .github/workflows/scrape-rate.yml from a Kerala gold
+  // rate aggregator (scripts/scrape-rate.mjs) — real 22K/24K/18K rates, no
+  // client-side API calls or manual calibration needed.
+  const DATA_URL = "./data/kerala-rate.json";
 
   const DEFAULT_SETTINGS = {
     activeCarat: "22K",
-    premiumFactor: 1.0,
     lastPanikooli: 10,
     lastGst: 3,
     alertCarat: null,
@@ -56,13 +52,6 @@
     return `${y}-${m}-${day}`;
   }
 
-  function addDays(dateKey, delta) {
-    const [y, m, d] = dateKey.split("-").map(Number);
-    const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() + delta);
-    return todayKey(dt);
-  }
-
   function inr(n, decimals) {
     if (n === null || n === undefined || isNaN(n)) return "--";
     const opts = { maximumFractionDigits: decimals || 0, minimumFractionDigits: decimals || 0 };
@@ -77,10 +66,6 @@
     if (n === null || n === undefined || isNaN(n)) return "--";
     const sign = n > 0 ? "+" : "";
     return `${sign}${n.toFixed(decimals === undefined ? 2 : decimals)}%`;
-  }
-
-  function randRange(min, max) {
-    return min + Math.random() * (max - min);
   }
 
   function formatTime(d) {
@@ -135,46 +120,12 @@
   // ---------- State ----------
 
   let settings = loadSettings();
-  let history = loadHistory(); // [{date, rates:{24K,22K,18K}, synthetic:bool}], ascending by date
+  let history = loadHistory(); // [{date, rates:{24K,22K,18K}}], ascending by date
   let bookings = loadBookings();
   let trendChart = null;
   const sparklineCharts = {};
 
   // ---------- Rate math ----------
-
-  function deriveCaratRates(rate24K_INR, premiumFactor) {
-    const out = {};
-    CARATS.forEach((c) => {
-      out[c] = rate24K_INR * PURITY[c] * premiumFactor;
-    });
-    return out;
-  }
-
-  function upsertSnapshot(dateKey, rates, synthetic) {
-    const idx = history.findIndex((h) => h.date === dateKey);
-    const entry = { date: dateKey, rates, synthetic: !!synthetic };
-    if (idx >= 0) history[idx] = entry;
-    else history.push(entry);
-    history.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  }
-
-  function seedHistoryIfNeeded(todayRate24K) {
-    if (history.length > 0) return;
-    const days = new Array(30);
-    days[29] = todayRate24K;
-    for (let i = 28; i >= 0; i--) {
-      const deltaPct = randRange(0.5, 1.5) / 100 * (Math.random() < 0.5 ? -1 : 1);
-      days[i] = days[i + 1] / (1 + deltaPct);
-    }
-    const today = todayKey();
-    for (let i = 0; i < 30; i++) {
-      const offset = i - 29; // -29 .. 0
-      const dateKey = addDays(today, offset);
-      const rates = deriveCaratRates(days[i], settings.premiumFactor);
-      upsertSnapshot(dateKey, rates, offset !== 0);
-    }
-    saveHistory(history);
-  }
 
   function getSortedHistory() {
     return history.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -188,16 +139,6 @@
   function latestSnapshot() {
     const h = getSortedHistory();
     return h.length ? h[h.length - 1] : null;
-  }
-
-  function snapshotAtOrBefore(dateKey) {
-    const h = getSortedHistory();
-    let found = null;
-    for (const s of h) {
-      if (s.date <= dateKey) found = s;
-      else break;
-    }
-    return found || (h.length ? h[0] : null);
   }
 
   function rateFor(snapshot, carat) {
@@ -264,49 +205,46 @@
     return { level, label, reason, position, momentum };
   }
 
-  // ---------- Live rate fetch ----------
+  // ---------- Data fetch ----------
+  // The rate itself is scraped server-side by .github/workflows/scrape-rate.yml
+  // (scripts/scrape-rate.mjs) from a Kerala gold rate aggregator and committed
+  // as data/kerala-rate.json. The client just fetches that file — no API keys,
+  // no manual calibration input, no client-side scraping.
 
-  async function fetchLiveRate24K() {
+  let dataMeta = { source: null, fetchedAt: null, fromCache: false };
+
+  async function loadKeralaRateData() {
     try {
-      const [xauRes, fxRes] = await Promise.all([
-        fetch(XAU_API),
-        fetch(FX_API),
-      ]);
-      if (!xauRes.ok || !fxRes.ok) throw new Error("bad response");
-      const xau = await xauRes.json();
-      const fx = await fxRes.json();
-      const xauUsd = xau.price;
-      const usdInr = fx.rates && fx.rates.INR;
-      if (!xauUsd || !usdInr) throw new Error("missing fields");
-      const rate24K = (xauUsd / OZ_TO_GRAM) * usdInr;
-      return { ok: true, rate24K };
+      const res = await fetch(`${DATA_URL}?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`bad response ${res.status}`);
+      const payload = await res.json();
+      if (!Array.isArray(payload.history) || payload.history.length === 0) {
+        throw new Error("empty history in data file");
+      }
+      history = payload.history.map((r) => ({
+        date: r.date,
+        rates: { "24K": r.rate24K, "22K": r.rate22K, "18K": r.rate18K },
+      }));
+      saveHistory(history);
+      dataMeta = { source: payload.source, fetchedAt: payload.fetchedAt, fromCache: false };
+      localStorage.setItem(STORAGE.meta, JSON.stringify(dataMeta));
+      return true;
     } catch (e) {
-      return { ok: false, error: e };
+      // Offline or the data file isn't reachable yet — fall back to whatever
+      // was cached locally from the last successful load.
+      const cachedMeta = localStorage.getItem(STORAGE.meta);
+      if (cachedMeta) {
+        try { dataMeta = { ...JSON.parse(cachedMeta), fromCache: true }; } catch (e2) { /* ignore */ }
+      }
+      return history.length > 0;
     }
   }
 
-  async function refreshRate(showSpinner) {
+  async function refreshData(showSpinner) {
     const btn = document.getElementById("refresh-btn");
     if (showSpinner && btn) btn.classList.add("spinning");
 
-    const result = await fetchLiveRate24K();
-    let rate24K;
-    let synthetic = false;
-    if (result.ok) {
-      rate24K = result.rate24K;
-    } else {
-      // Fallback: hold near the anchor / last known rate with a tiny drift so
-      // the app remains usable offline or when the free APIs are rate-limited.
-      const last = latestSnapshot();
-      const base = last ? last.rates["24K"] / settings.premiumFactor : ANCHOR_24K_INR;
-      rate24K = base * (1 + randRange(-0.3, 0.3) / 100);
-      synthetic = true;
-    }
-
-    seedHistoryIfNeeded(rate24K);
-    const rates = deriveCaratRates(rate24K, settings.premiumFactor);
-    upsertSnapshot(todayKey(), rates, synthetic);
-    saveHistory(history);
+    await loadKeralaRateData();
 
     if (showSpinner && btn) {
       setTimeout(() => btn.classList.remove("spinning"), 500);
@@ -352,7 +290,10 @@
       changeEl.innerHTML = `<span class="change-amount mono ${cls}">${arrow} ${inr(Math.abs(round0(change.abs)))} (${pct(change.pct)}) today</span>`;
     }
 
-    document.getElementById("home-updated").textContent = `as of ${formatTime(new Date())}`;
+    const latestDate = latest ? formatDateLong(latest.date) : "--";
+    const asOf = dataMeta.fetchedAt ? formatTime(new Date(dataMeta.fetchedAt)) : latestDate;
+    document.getElementById("home-updated").textContent =
+      dataMeta.fromCache ? `${latestDate}'s rate — offline, showing last synced data` : `${latestDate} · synced ${asOf}`;
 
     const signal = computeSignal(carat);
     const badge = document.getElementById("home-signal-badge");
@@ -373,7 +314,10 @@
       return `<tr><td>${c}${c === carat ? " •" : ""}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${inr(round0(r * GRAMS_PER_PAVAN))}</td></tr>`;
     }).join("");
 
-    document.getElementById("premium-input").value = settings.premiumFactor;
+    document.getElementById("data-source-note").textContent = dataMeta.source
+      ? `Sourced from ${new URL(dataMeta.source).hostname}, refreshed automatically a few times a day.`
+      : "Loading data source info…";
+    document.getElementById("stale-data-note").hidden = !dataMeta.fromCache;
   }
 
   function renderAnalysis(period) {
@@ -398,9 +342,6 @@
       commentary = `Rate has been trending downward this ${periodWord}, down ${pct(Math.abs(stats.changePct) * -1)} from the start of the period.`;
     }
     document.getElementById("analysis-commentary").textContent = commentary;
-
-    const hasSynthetic = stats.days.some((d) => d.synthetic);
-    document.getElementById("synthetic-note").hidden = !hasSynthetic;
 
     renderTrendChart(stats.days, carat);
   }
@@ -702,17 +643,7 @@
   }
 
   function wireRefresh() {
-    document.getElementById("refresh-btn").addEventListener("click", () => refreshRate(true));
-  }
-
-  function wirePremium() {
-    document.getElementById("premium-save-btn").addEventListener("click", () => {
-      const v = Number(document.getElementById("premium-input").value);
-      if (!v || v <= 0) return;
-      settings.premiumFactor = v;
-      saveSettings(settings);
-      refreshRate(false);
-    });
+    document.getElementById("refresh-btn").addEventListener("click", () => refreshData(true));
   }
 
   function wireBookingForm() {
@@ -811,12 +742,11 @@
     wireCaratPills();
     wirePeriodToggle();
     wireRefresh();
-    wirePremium();
     wireBookingForm();
     wireAlert();
     registerServiceWorker();
 
-    refreshRate(false);
+    refreshData(false);
   }
 
   document.addEventListener("DOMContentLoaded", init);

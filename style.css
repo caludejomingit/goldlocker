@@ -447,9 +447,9 @@ input[type="text"] {
   padding: 14px;
 }
 
-.synthetic-note {
+.stale-data-note {
   font-size: 11.5px;
-  color: var(--ink-soft);
+  color: var(--amber);
   font-style: italic;
   margin-top: 10px;
   line-height: 1.5;

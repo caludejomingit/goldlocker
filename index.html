@@ -88,16 +88,12 @@
         </table>
       </div>
 
-      <p class="calibration-note">Gold's base rate is set state-wide across Kerala — import duty, GST and the national/international price are uniform. What differs city to city is jeweller making charges, not the base metal rate. "Kothamangalam" here means the Kerala base rate, calibrated against what local jewellers quote — not a separate hyper-local feed. Adjust the calibration factor in Settings below if needed.</p>
+      <p class="calibration-note">Gold's base rate is set state-wide across Kerala — import duty, GST and the national/international price are uniform. What differs city to city is jeweller making charges, not the base metal rate. "Kothamangalam" here means the Kerala base rate — not a separate hyper-local feed.</p>
 
       <div class="panel settings-panel">
-        <h2 class="panel-title">Calibration</h2>
-        <label class="field-label" for="premium-input">Local premium factor (vs base rate)</label>
-        <div class="premium-row">
-          <input type="number" id="premium-input" step="0.001" min="0.5" max="2">
-          <button class="btn-secondary" id="premium-save-btn">Save</button>
-        </div>
-        <p class="field-hint">Multiplies the derived base rate. 1.000 = no adjustment. Nudge this up or down after checking an actual showroom quote.</p>
+        <h2 class="panel-title">Data source</h2>
+        <p class="field-hint" id="data-source-note">Loading data source info…</p>
+        <p class="stale-data-note" id="stale-data-note" hidden>You're offline, or the automated data sync hasn't run yet — showing the last successfully synced rate.</p>
       </div>
     </section>
 
@@ -134,7 +130,6 @@
       </div>
 
       <p class="commentary" id="analysis-commentary">Loading trend commentary…</p>
-      <p class="synthetic-note" id="synthetic-note" hidden>Some of this history is placeholder data, generated on first load so the chart isn't empty. It's gradually being replaced by real daily readings.</p>
     </section>
 
     <!-- BOOKING -->

@@ -130,11 +130,13 @@
       </div>
 
       <div class="stat-grid stat-grid-4">
-        <div class="stat-card">
+        <div class="stat-card stat-card-high">
+          <span class="stat-card-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 10 11 14 15 20 8"/><path d="M14 8h6v6"/></svg></span>
           <span class="stat-card-title">High</span>
           <span class="stat-card-value mono" id="analysis-high">--</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card stat-card-low">
+          <span class="stat-card-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 10 13 14 9 20 16"/><path d="M14 16h6v-6"/></svg></span>
           <span class="stat-card-title">Low</span>
           <span class="stat-card-value mono" id="analysis-low">--</span>
         </div>
@@ -149,6 +151,16 @@
       </div>
 
       <p class="commentary" id="analysis-commentary">Loading trend commentary…</p>
+
+      <div class="panel">
+        <h2 class="panel-title">Last few days</h2>
+        <table class="carat-table" id="analysis-recent-days">
+          <thead>
+            <tr><th>Day</th><th>₹/gram</th><th>Change</th></tr>
+          </thead>
+          <tbody id="analysis-recent-days-body"></tbody>
+        </table>
+      </div>
     </section>
 
     <!-- BOOKING -->
@@ -252,11 +264,20 @@
 
       <div class="panel">
         <h2 class="panel-title">Daily 10 AM rate notification</h2>
-        <p class="field-hint">A real push notification with the day's rate, sent every morning around 10 AM IST — works even if Goldlocker isn't open. Needs a one-time setup: subscribing here, then copying a code to whoever maintains this app so it can be registered server-side.</p>
-        <button class="btn-primary btn-block" id="push-subscribe-btn">Enable daily notification</button>
-        <p class="mono" id="push-status">Not subscribed yet.</p>
+        <p class="field-hint">One notification a day with the 22K rate, around 10 AM IST — works even if Goldlocker isn't open.</p>
+
+        <div class="push-status-row">
+          <span class="push-status-dot" id="push-status-dot"></span>
+          <span class="mono" id="push-status">Not subscribed.</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-secondary" id="push-unsubscribe-btn" hidden>Cancel subscription</button>
+          <button class="btn-primary" id="push-subscribe-btn">Enable notification</button>
+        </div>
+
         <div id="push-code-wrap" hidden>
-          <label class="field-label" for="push-code">Copy this and send it to whoever maintains Goldlocker (one-time setup)</label>
+          <label class="field-label" for="push-code">One-time setup: copy this and send it to whoever maintains Goldlocker</label>
           <textarea id="push-code" class="push-code-box" rows="4" readonly></textarea>
           <button type="button" class="btn-secondary btn-block" id="push-copy-btn">Copy code</button>
         </div>

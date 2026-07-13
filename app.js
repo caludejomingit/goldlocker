@@ -48,6 +48,7 @@
     alertCarat: null,
     alertThreshold: null,
     alertFiredKey: null, // `${date}:${threshold}` — prevents renotifying same day/threshold
+    pushSubscribedAt: null,
   };
 
   const SEED_BOOKING = {
@@ -226,12 +227,46 @@
   }
 
   // ---------- Data fetch ----------
-  // The rate itself is scraped server-side by .github/workflows/scrape-rate.yml
-  // (scripts/scrape-rate.mjs) from a Kerala gold rate aggregator and committed
-  // as data/kerala-rate.json. The client just fetches that file — no API keys,
-  // no manual calibration input, no client-side scraping.
+  // Passive loads read data/kerala-rate.json, kept fresh a few times a day by
+  // .github/workflows/scrape-rate.yml (scripts/scrape-rate.mjs) — fast,
+  // same-origin, works offline. The manual refresh button additionally tries
+  // a genuine live fetch straight from the source in the browser (it sends
+  // Access-Control-Allow-Origin: *, so this works cross-origin) so tapping
+  // refresh reflects the current-moment rate, not just the last cron run.
 
-  let dataMeta = { source: null, fetchedAt: null, fromCache: false };
+  const SOURCE_PAGE_URL = "https://keralagoldrates.com/today-22k-gold-rate-kerala/";
+
+  function parseKeralaRateHtml(html) {
+    const match = html.match(/const\s+todayChartData\s*=\s*"((?:[^"\\]|\\.)*)"/);
+    if (!match) throw new Error("rate data not found on page");
+    const jsonText = match[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    const raw = JSON.parse(jsonText);
+    if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty rate data");
+
+    const byDate = new Map();
+    for (const row of raw) {
+      if (!row.date || !row.rate_22k || byDate.has(row.date)) continue;
+      byDate.set(row.date, {
+        date: row.date,
+        rates: { "24K": Number(row.rate_24k), "22K": Number(row.rate_22k), "18K": Number(row.rate_18k) },
+      });
+    }
+    const parsed = Array.from(byDate.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    if (parsed.length === 0) throw new Error("no valid dated rows");
+    return parsed;
+  }
+
+  let dataMeta = { source: null, fetchedAt: null, fromCache: false, live: false };
+
+  async function loadLiveFromSource() {
+    const res = await fetch(`${SOURCE_PAGE_URL}?t=${Date.now()}`);
+    if (!res.ok) throw new Error(`bad response ${res.status}`);
+    const html = await res.text();
+    history = parseKeralaRateHtml(html);
+    saveHistory(history);
+    dataMeta = { source: SOURCE_PAGE_URL, fetchedAt: new Date().toISOString(), fromCache: false, live: true };
+    localStorage.setItem(STORAGE.meta, JSON.stringify(dataMeta));
+  }
 
   async function loadKeralaRateData() {
     try {
@@ -246,7 +281,7 @@
         rates: { "24K": r.rate24K, "22K": r.rate22K, "18K": r.rate18K },
       }));
       saveHistory(history);
-      dataMeta = { source: payload.source, fetchedAt: payload.fetchedAt, fromCache: false };
+      dataMeta = { source: payload.source, fetchedAt: payload.fetchedAt, fromCache: false, live: false };
       localStorage.setItem(STORAGE.meta, JSON.stringify(dataMeta));
       return true;
     } catch (e) {
@@ -260,13 +295,21 @@
     }
   }
 
-  async function refreshData(showSpinner) {
+  async function refreshData(live) {
     const btn = document.getElementById("refresh-btn");
-    if (showSpinner && btn) btn.classList.add("spinning");
+    if (live && btn) btn.classList.add("spinning");
 
-    await loadKeralaRateData();
+    if (live) {
+      try {
+        await loadLiveFromSource();
+      } catch (e) {
+        await loadKeralaRateData();
+      }
+    } else {
+      await loadKeralaRateData();
+    }
 
-    if (showSpinner && btn) {
+    if (live && btn) {
       setTimeout(() => btn.classList.remove("spinning"), 500);
     }
 
@@ -291,6 +334,26 @@
     document.getElementById("carat-locked-note").hidden = !onBooking;
   }
 
+  function renderRecentDaysTable(tbodyId, carat) {
+    const recentDays = trailingDays(4).slice().reverse(); // today first, oldest last
+    const dayLabels = ["Today", "Yesterday", "2 days ago", "3 days ago"];
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = recentDays.map((day, i) => {
+      const r = rateFor(day, carat);
+      const prev = recentDays[i + 1];
+      const prevR = prev ? rateFor(prev, carat) : null;
+      let changeCell = "--";
+      if (prevR !== null && prevR !== undefined) {
+        const d = r - prevR;
+        const cls = d >= 0 ? "value-positive" : "value-negative";
+        const arrow = d >= 0 ? "▲" : "▼";
+        changeCell = `<span class="${cls}">${arrow} ${inr(Math.abs(round0(d)))}</span>`;
+      }
+      const label = dayLabels[i] || formatDateLong(day.date);
+      return `<tr><td>${label}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${changeCell}</td></tr>`;
+    }).join("");
+  }
+
   function renderHome() {
     const carat = settings.activeCarat;
     const latest = latestSnapshot();
@@ -312,8 +375,14 @@
 
     const latestDate = latest ? formatDateLong(latest.date) : "--";
     const asOf = dataMeta.fetchedAt ? formatTime(new Date(dataMeta.fetchedAt)) : latestDate;
-    document.getElementById("home-updated").textContent =
-      dataMeta.fromCache ? `${latestDate}'s rate — offline, showing last synced data` : `${latestDate} · synced ${asOf}`;
+    const updatedEl = document.getElementById("home-updated");
+    if (dataMeta.fromCache) {
+      updatedEl.textContent = `${latestDate}'s rate — offline, showing last synced data`;
+    } else if (dataMeta.live) {
+      updatedEl.textContent = `Live · fetched just now at ${asOf}`;
+    } else {
+      updatedEl.textContent = `${latestDate} · synced ${asOf}`;
+    }
 
     const signal = computeSignal(carat);
     const badge = document.getElementById("home-signal-badge");
@@ -334,23 +403,7 @@
       return `<tr><td>${c}${c === carat ? " •" : ""}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${inr(round0(r * GRAMS_PER_PAVAN))}</td></tr>`;
     }).join("");
 
-    const recentDays = trailingDays(4).slice().reverse(); // today first, oldest last
-    const dayLabels = ["Today", "Yesterday", "2 days ago", "3 days ago"];
-    const recentBody = document.getElementById("recent-days-table-body");
-    recentBody.innerHTML = recentDays.map((day, i) => {
-      const r = rateFor(day, carat);
-      const prev = recentDays[i + 1];
-      const prevR = prev ? rateFor(prev, carat) : null;
-      let changeCell = "--";
-      if (prevR !== null && prevR !== undefined) {
-        const d = r - prevR;
-        const cls = d >= 0 ? "value-positive" : "value-negative";
-        const arrow = d >= 0 ? "▲" : "▼";
-        changeCell = `<span class="${cls}">${arrow} ${inr(Math.abs(round0(d)))}</span>`;
-      }
-      const label = dayLabels[i] || formatDateLong(day.date);
-      return `<tr><td>${label}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${changeCell}</td></tr>`;
-    }).join("");
+    renderRecentDaysTable("recent-days-table-body", carat);
 
     document.getElementById("data-source-note").textContent = dataMeta.source
       ? `Sourced from ${new URL(dataMeta.source).hostname}, refreshed automatically a few times a day.`
@@ -381,6 +434,7 @@
     }
     document.getElementById("analysis-commentary").textContent = commentary;
 
+    renderRecentDaysTable("analysis-recent-days-body", carat);
     renderTrendChart(stats.days, carat);
   }
 
@@ -458,29 +512,39 @@
           <span class="booking-carat-tag">${b.carat}</span>
         </div>
         <div class="booking-meta">
-          <span class="mono">${b.weight.toFixed(3)}g</span> · ${formatDateLong(b.date)} · paid <span class="mono">${inr(b.amount)}</span> at <span class="mono">${inr(b.rate)}</span>/g
+          <span class="mono">${b.weight.toFixed(3)}g</span> · ${formatDateLong(b.date)} · paid <span class="mono">${inr(b.amount)}</span>
         </div>
 
-        <div class="compare-detail">
-          <div class="breakdown-row"><span>Gram rate then → now</span><span class="mono">${inr(b.rate)} → <span class="${rateDiffCls}">${inr(round0(currentRate))}</span></span></div>
-          <div class="breakdown-row"><span>Pavan rate then → now</span><span class="mono">${inr(round0(b.rate * GRAMS_PER_PAVAN))} → <span class="${rateDiffCls}">${inr(round0(currentRate * GRAMS_PER_PAVAN))}</span></span></div>
-          <div class="breakdown-row"><span>Gold value then → now</span><span class="mono">${inr(round0(goldValueAtPurchase))} → ${inr(round0(goldValueToday))}</span></div>
+        <div class="booking-hero ${ahead ? "ahead" : "behind"}">
+          <div class="booking-hero-rates">
+            <div class="bhr-col">
+              <span class="bhr-label">Then</span>
+              <span class="bhr-value mono">${inr(b.rate)}<small>/g</small></span>
+            </div>
+            <span class="booking-hero-arrow">→</span>
+            <div class="bhr-col">
+              <span class="bhr-label">Now</span>
+              <span class="bhr-value mono">${inr(round0(currentRate))}<small>/g</small></span>
+            </div>
+          </div>
+          <div class="booking-hero-diff">
+            <span>${ahead ? "You're ahead by" : "Amount is down by"}</span>
+            <strong class="mono">${inr(Math.abs(round0(diff)))} (${pct(Math.abs(diffPct))})</strong>
+          </div>
         </div>
 
-        <div class="booking-compare">
-          <span class="booking-compare-label">${ahead ? "You're ahead by" : "Amount is down by"}</span>
-          <span class="booking-compare-value ${ahead ? "positive" : "negative"}">${inr(Math.abs(round0(diff)))} (${pct(Math.abs(diffPct))})</span>
-        </div>
-
-        <div class="booking-signal">
+        <div class="booking-signal-mini">
           <span class="signal-badge ${buySignal.level.toLowerCase()}">${signalIcon(buySignal.level)}<span>${buySignal.label}</span></span>
-          <span class="booking-signal-text">Buying more ${b.carat} right now: ${buySignal.reason}</span>
+          <span>Buying more ${b.carat} now: ${buySignal.reason}</span>
         </div>
 
         <div class="sparkline-wrap"><canvas id="spark-${b.id}"></canvas></div>
 
-        <button class="breakdown-toggle" data-toggle="${b.id}">Price breakdown ▾</button>
+        <button class="breakdown-toggle" data-toggle="${b.id}">Full price details ▾</button>
         <div class="breakdown" id="breakdown-${b.id}" hidden>
+          <div class="breakdown-row"><span>Pavan rate then → now</span><span class="mono">${inr(round0(b.rate * GRAMS_PER_PAVAN))} → <span class="${rateDiffCls}">${inr(round0(currentRate * GRAMS_PER_PAVAN))}</span></span></div>
+          <div class="breakdown-row"><span>Gold value then → now</span><span class="mono">${inr(round0(goldValueAtPurchase))} → ${inr(round0(goldValueToday))}</span></div>
+
           <div class="breakdown-inputs">
             <div>
               <label>Making charge %</label>
@@ -605,8 +669,8 @@
     document.getElementById("signal-numbers").innerHTML = `
       <div><span class="sn-label">Current rate</span><span class="sn-value">${inr(round0(latest))}/g</span></div>
       <div><span class="sn-label">30-day range</span><span class="sn-value">${inr(round0(month.low))} – ${inr(round0(month.high))}</span></div>
-      <div><span class="sn-label">3-day momentum</span><span class="sn-value">${signal.momentum}</span></div>
-      <div><span class="sn-label">Position formula</span><span class="sn-value">${((latest - month.low)).toFixed(0)} / ${((month.high - month.low)).toFixed(0)}</span></div>
+      <div><span class="sn-label">3-day trend</span><span class="sn-value">${signal.momentum}</span></div>
+      <div><span class="sn-label">Above the low by</span><span class="sn-value">${inr(round0(latest - month.low))} of ${inr(round0(month.high - month.low))}</span></div>
     `;
 
     if (settings.alertThreshold) {
@@ -699,23 +763,33 @@
 
   async function refreshPushUi() {
     const statusEl = document.getElementById("push-status");
-    const btn = document.getElementById("push-subscribe-btn");
+    const dotEl = document.getElementById("push-status-dot");
+    const subBtn = document.getElementById("push-subscribe-btn");
+    const unsubBtn = document.getElementById("push-unsubscribe-btn");
+    dotEl.className = "push-status-dot";
+
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
       statusEl.textContent = "Push notifications aren't supported in this browser.";
-      btn.disabled = true;
+      subBtn.disabled = true;
       return;
     }
     if (Notification.permission === "denied") {
       statusEl.textContent = "Notifications are blocked for this site in your browser settings.";
+      dotEl.className = "push-status-dot blocked";
+      unsubBtn.hidden = true;
       return;
     }
     const sub = await getPushSubscription().catch(() => null);
     if (sub) {
-      statusEl.textContent = "Subscribed on this device. If you haven't already sent the setup code, tap the button again to get it.";
-      btn.textContent = "Show setup code again";
+      dotEl.className = "push-status-dot active";
+      const since = settings.pushSubscribedAt ? formatDateLong(settings.pushSubscribedAt.slice(0, 10)) : null;
+      statusEl.textContent = since ? `Subscribed since ${since} on this device.` : "Subscribed on this device.";
+      subBtn.textContent = "Show setup code again";
+      unsubBtn.hidden = false;
     } else {
-      statusEl.textContent = "Not subscribed yet.";
-      btn.textContent = "Enable daily notification";
+      statusEl.textContent = "Not subscribed.";
+      subBtn.textContent = "Enable notification";
+      unsubBtn.hidden = true;
     }
   }
 
@@ -740,12 +814,30 @@
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });
+        settings.pushSubscribedAt = new Date().toISOString();
+        saveSettings(settings);
       }
       codeBox.value = JSON.stringify(sub);
       codeWrap.hidden = false;
-      statusEl.textContent = "Subscribed on this device — copy the code below and send it over for one-time setup.";
+      await refreshPushUi();
     } catch (e) {
       statusEl.textContent = "Couldn't subscribe: " + (e.message || e);
+    }
+  }
+
+  async function unsubscribeFromPush() {
+    const statusEl = document.getElementById("push-status");
+    const codeWrap = document.getElementById("push-code-wrap");
+    try {
+      const sub = await getPushSubscription();
+      if (sub) await sub.unsubscribe();
+      settings.pushSubscribedAt = null;
+      saveSettings(settings);
+      codeWrap.hidden = true;
+      await refreshPushUi();
+      statusEl.textContent = "Cancelled on this device. If you already shared a setup code, let whoever maintains Goldlocker know so the daily job can be cleared too.";
+    } catch (e) {
+      statusEl.textContent = "Couldn't cancel: " + (e.message || e);
     }
   }
 
@@ -869,6 +961,7 @@
 
   function wirePush() {
     document.getElementById("push-subscribe-btn").addEventListener("click", subscribeToPush);
+    document.getElementById("push-unsubscribe-btn").addEventListener("click", unsubscribeFromPush);
     document.getElementById("push-copy-btn").addEventListener("click", async () => {
       const codeBox = document.getElementById("push-code");
       codeBox.select();

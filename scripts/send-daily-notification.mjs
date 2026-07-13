@@ -36,8 +36,8 @@ async function main() {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
   const payload = JSON.stringify({
-    title: "Goldlocker — today's gold rate",
-    body: `22K ₹${latest.rate22K.toLocaleString("en-IN")}/g · 24K ₹${latest.rate24K.toLocaleString("en-IN")}/g · 18K ₹${latest.rate18K.toLocaleString("en-IN")}/g`,
+    title: "Goldlocker",
+    body: `Today's 22K rate: ₹${latest.rate22K.toLocaleString("en-IN")}/gram`,
     url: "./",
   });
 

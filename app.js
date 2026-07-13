@@ -314,6 +314,24 @@
       return `<tr><td>${c}${c === carat ? " •" : ""}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${inr(round0(r * GRAMS_PER_PAVAN))}</td></tr>`;
     }).join("");
 
+    const recentDays = trailingDays(4).slice().reverse(); // today first, oldest last
+    const dayLabels = ["Today", "Yesterday", "2 days ago", "3 days ago"];
+    const recentBody = document.getElementById("recent-days-table-body");
+    recentBody.innerHTML = recentDays.map((day, i) => {
+      const r = rateFor(day, carat);
+      const prev = recentDays[i + 1];
+      const prevR = prev ? rateFor(prev, carat) : null;
+      let changeCell = "--";
+      if (prevR !== null && prevR !== undefined) {
+        const d = r - prevR;
+        const cls = d >= 0 ? "value-positive" : "value-negative";
+        const arrow = d >= 0 ? "▲" : "▼";
+        changeCell = `<span class="${cls}">${arrow} ${inr(Math.abs(round0(d)))}</span>`;
+      }
+      const label = dayLabels[i] || formatDateLong(day.date);
+      return `<tr><td>${label}</td><td class="mono">${inr(round0(r))}</td><td class="mono">${changeCell}</td></tr>`;
+    }).join("");
+
     document.getElementById("data-source-note").textContent = dataMeta.source
       ? `Sourced from ${new URL(dataMeta.source).hostname}, refreshed automatically a few times a day.`
       : "Loading data source info…";
@@ -406,7 +424,9 @@
       const diff = goldValueToday - goldValueAtPurchase;
       const diffPct = (diff / goldValueAtPurchase) * 100;
       const ahead = diff >= 0;
+      const rateDiffCls = currentRate <= b.rate ? "value-negative" : "value-positive";
       const breakdown = computeBreakdown(b);
+      const buySignal = computeSignal(b.carat);
 
       return `
       <div class="booking-card" data-id="${b.id}">
@@ -418,9 +438,19 @@
           <span class="mono">${b.weight.toFixed(3)}g</span> · ${formatDateLong(b.date)} · paid <span class="mono">${inr(b.amount)}</span> at <span class="mono">${inr(b.rate)}</span>/g
         </div>
 
+        <div class="compare-detail">
+          <div class="breakdown-row"><span>Rate then → now</span><span class="mono">${inr(b.rate)} → <span class="${rateDiffCls}">${inr(round0(currentRate))}</span></span></div>
+          <div class="breakdown-row"><span>Gold value then → now</span><span class="mono">${inr(round0(goldValueAtPurchase))} → ${inr(round0(goldValueToday))}</span></div>
+        </div>
+
         <div class="booking-compare">
-          <span class="booking-compare-label">${ahead ? "You're ahead by" : "Market has moved against this by"}</span>
+          <span class="booking-compare-label">${ahead ? "You're ahead by" : "Amount is down by"}</span>
           <span class="booking-compare-value ${ahead ? "positive" : "negative"}">${inr(Math.abs(round0(diff)))} (${pct(Math.abs(diffPct))})</span>
+        </div>
+
+        <div class="booking-signal">
+          <span class="signal-badge ${buySignal.level.toLowerCase()}">${buySignal.label}</span>
+          <span class="booking-signal-text">Buying more ${b.carat} right now: ${buySignal.reason}</span>
         </div>
 
         <div class="sparkline-wrap"><canvas id="spark-${b.id}"></canvas></div>

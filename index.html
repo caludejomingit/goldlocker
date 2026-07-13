@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Goldlocker — Kothamangalam Gold Rate Tracker</title>
+<meta name="description" content="Daily gold rate tracker and buy-timing signal for Kerala gold, calibrated for Kothamangalam.">
+<meta name="theme-color" content="#2B1017">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600;1,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">Goldlocker</span>
+      <span class="brand-sub">Kothamangalam gold tracker</span>
+    </div>
+    <div class="carat-pills" id="carat-pills">
+      <button class="pill" data-carat="24K">24K</button>
+      <button class="pill" data-carat="22K">22K</button>
+      <button class="pill" data-carat="18K">18K</button>
+    </div>
+    <div class="carat-locked-note" id="carat-locked-note" hidden>Bookings show each purchase at its own carat</div>
+  </header>
+
+  <main id="screens">
+
+    <!-- HOME -->
+    <section id="screen-home" class="screen active">
+      <div class="rate-board">
+        <div class="rate-board-top">
+          <span class="rate-board-label" id="home-carat-label">22K GOLD · KOTHAMANGALAM</span>
+          <button class="refresh-btn" id="refresh-btn" title="Refresh rate" aria-label="Refresh rate">⟳</button>
+        </div>
+        <div class="rate-board-main">
+          <span class="currency">₹</span><span class="rate-figure" id="home-rate-gram">----</span><span class="rate-unit">/gram</span>
+        </div>
+        <div class="rate-board-sub">
+          <span class="mono" id="home-rate-pavan">₹-- / pavan (8g)</span>
+        </div>
+        <div class="rate-board-change" id="home-change">
+          <span class="change-amount mono">--</span>
+        </div>
+        <div class="rate-board-footer">
+          <span id="home-updated">as of --</span>
+        </div>
+      </div>
+
+      <div class="signal-strip" id="home-signal-strip">
+        <span class="signal-badge" id="home-signal-badge">--</span>
+        <span class="signal-strip-text" id="home-signal-text">Loading signal…</span>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-card-title">Week High</span>
+          <span class="stat-card-value mono" id="home-week-high">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">Week Low</span>
+          <span class="stat-card-value mono" id="home-week-low">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">Month High</span>
+          <span class="stat-card-value mono" id="home-month-high">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">Month Low</span>
+          <span class="stat-card-value mono" id="home-month-low">--</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">All carats, today</h2>
+        <table class="carat-table" id="all-carat-table">
+          <thead>
+            <tr><th>Carat</th><th>₹/gram</th><th>₹/pavan</th></tr>
+          </thead>
+          <tbody id="all-carat-table-body"></tbody>
+        </table>
+      </div>
+
+      <p class="calibration-note">Gold's base rate is set state-wide across Kerala — import duty, GST and the national/international price are uniform. What differs city to city is jeweller making charges, not the base metal rate. "Kothamangalam" here means the Kerala base rate, calibrated against what local jewellers quote — not a separate hyper-local feed. Adjust the calibration factor in Settings below if needed.</p>
+
+      <div class="panel settings-panel">
+        <h2 class="panel-title">Calibration</h2>
+        <label class="field-label" for="premium-input">Local premium factor (vs base rate)</label>
+        <div class="premium-row">
+          <input type="number" id="premium-input" step="0.001" min="0.5" max="2">
+          <button class="btn-secondary" id="premium-save-btn">Save</button>
+        </div>
+        <p class="field-hint">Multiplies the derived base rate. 1.000 = no adjustment. Nudge this up or down after checking an actual showroom quote.</p>
+      </div>
+    </section>
+
+    <!-- ANALYSIS -->
+    <section id="screen-analysis" class="screen">
+      <h1 class="screen-title">Analysis</h1>
+
+      <div class="segmented" id="period-toggle">
+        <button class="segment active" data-period="week">Week</button>
+        <button class="segment" data-period="month">Month</button>
+      </div>
+
+      <div class="panel chart-panel">
+        <canvas id="trend-chart" height="220"></canvas>
+      </div>
+
+      <div class="stat-grid stat-grid-4">
+        <div class="stat-card">
+          <span class="stat-card-title">High</span>
+          <span class="stat-card-value mono" id="analysis-high">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">Low</span>
+          <span class="stat-card-value mono" id="analysis-low">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">Average</span>
+          <span class="stat-card-value mono" id="analysis-avg">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">% Change</span>
+          <span class="stat-card-value mono" id="analysis-change">--</span>
+        </div>
+      </div>
+
+      <p class="commentary" id="analysis-commentary">Loading trend commentary…</p>
+      <p class="synthetic-note" id="synthetic-note" hidden>Some of this history is placeholder data, generated on first load so the chart isn't empty. It's gradually being replaced by real daily readings.</p>
+    </section>
+
+    <!-- BOOKING -->
+    <section id="screen-booking" class="screen">
+      <h1 class="screen-title">Bookings</h1>
+
+      <div id="booking-list"></div>
+
+      <button class="btn-primary btn-block" id="add-booking-toggle">+ Add booking</button>
+
+      <form class="panel booking-form" id="booking-form" hidden>
+        <h2 class="panel-title">New booking</h2>
+
+        <label class="field-label" for="bk-name">Name</label>
+        <input type="text" id="bk-name" placeholder="e.g. Amma's Chain" required>
+
+        <label class="field-label" for="bk-date">Date</label>
+        <input type="date" id="bk-date" required>
+
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="bk-weight">Weight (grams)</label>
+            <input type="number" id="bk-weight" step="0.001" min="0.001" required>
+          </div>
+          <div>
+            <label class="field-label" for="bk-carat">Carat</label>
+            <select id="bk-carat">
+              <option value="24K">24K</option>
+              <option value="22K" selected>22K</option>
+              <option value="18K">18K</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="field-label" for="bk-amount">Amount paid (₹, gold value)</label>
+        <input type="number" id="bk-amount" step="1" min="1" required>
+
+        <div class="form-row">
+          <div>
+            <label class="field-label" for="bk-panikooli">Panikooli %</label>
+            <input type="number" id="bk-panikooli" step="0.1" min="0">
+          </div>
+          <div>
+            <label class="field-label" for="bk-gst">GST %</label>
+            <input type="number" id="bk-gst" step="0.1" min="0">
+          </div>
+        </div>
+
+        <p class="form-error" id="booking-form-error" hidden></p>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" id="cancel-booking-btn">Cancel</button>
+          <button type="submit" class="btn-primary">Save booking</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- SIGNAL -->
+    <section id="screen-signal" class="screen">
+      <h1 class="screen-title">Signal</h1>
+
+      <div class="signal-card" id="signal-card">
+        <span class="signal-card-badge" id="signal-card-badge">--</span>
+        <p class="signal-card-reason" id="signal-card-reason">Loading…</p>
+
+        <div class="range-bar-wrap">
+          <div class="range-bar-labels">
+            <span id="range-low-label">Low --</span>
+            <span id="range-high-label">High --</span>
+          </div>
+          <div class="range-bar">
+            <div class="range-bar-fill" id="range-bar-fill"></div>
+            <div class="range-bar-marker" id="range-bar-marker"></div>
+          </div>
+          <div class="range-bar-position mono" id="range-bar-position">Position: --%</div>
+        </div>
+
+        <div class="signal-numbers" id="signal-numbers"></div>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">How this is calculated</h2>
+        <ol class="explain-list">
+          <li>Take the last 30 stored days for the selected carat and find the high and low.</li>
+          <li>Position = (current rate − 30-day low) ÷ (30-day high − 30-day low), as a percentage.</li>
+          <li>Position ≤ 30% → <strong>BUY</strong> (near the monthly low). Position ≥ 70% → <strong>WAIT</strong> (near the monthly high). Otherwise → <strong>HOLD</strong>.</li>
+          <li>If the 3-day trend is falling and a BUY is already signalled, it's labelled "BUY — dip in progress".</li>
+        </ol>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">Price alert</h2>
+        <p class="field-hint">Get a browser notification when the rate for the selected carat drops below a threshold you set. Checked each time the app loads or refreshes — this is not a push service, so it only fires while Goldlocker is open.</p>
+        <label class="field-label" for="alert-threshold">Notify me when rate drops below (₹/gram)</label>
+        <div class="premium-row">
+          <input type="number" id="alert-threshold" step="1" min="1" placeholder="e.g. 12500">
+          <button class="btn-secondary" id="alert-save-btn">Set alert</button>
+        </div>
+        <p class="mono" id="alert-status">No alert set.</p>
+      </div>
+
+      <p class="disclaimer">This signal is a simple rule-based heuristic based on recent price range and momentum. It is not financial advice.</p>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-screen="home"><span class="tab-icon">⌂</span><span class="tab-label">Home</span></button>
+    <button class="tab" data-screen="analysis"><span class="tab-icon">📈</span><span class="tab-label">Analysis</span></button>
+    <button class="tab" data-screen="booking"><span class="tab-icon">🧾</span><span class="tab-label">Booking</span></button>
+    <button class="tab" data-screen="signal"><span class="tab-icon">◎</span><span class="tab-label">Signal</span></button>
+  </nav>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

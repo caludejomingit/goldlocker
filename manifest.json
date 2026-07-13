@@ -1,0 +1,19 @@
+{
+  "name": "Goldlocker",
+  "short_name": "Goldlocker",
+  "description": "Kothamangalam gold rate tracker and buy-timing signal",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF6EC",
+  "theme_color": "#2B1017",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

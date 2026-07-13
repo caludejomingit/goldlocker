@@ -125,6 +125,7 @@ main {
 
 /* RATE BOARD (home hero) */
 .rate-board {
+  position: relative;
   background: var(--maroon);
   background-image: radial-gradient(circle at 15% 0%, var(--maroon-soft), var(--maroon) 60%);
   border-radius: 18px;
@@ -132,6 +133,16 @@ main {
   color: var(--ivory);
   box-shadow: 0 8px 24px rgba(43, 16, 23, 0.28);
   margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.rate-board-motif {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  color: var(--gold-soft);
+  opacity: 0.18;
+  pointer-events: none;
 }
 
 .rate-board-top {
@@ -238,6 +249,9 @@ main {
 }
 
 .signal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 700;
   font-size: 12px;
@@ -246,6 +260,8 @@ main {
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
+
+.signal-badge svg { flex-shrink: 0; }
 
 .signal-badge.buy { background: var(--sage-bg); color: var(--sage); }
 .signal-badge.wait { background: var(--amber-bg); color: var(--amber); }
@@ -269,6 +285,7 @@ main {
 }
 
 .stat-card {
+  position: relative;
   background: #fff;
   border: 1px solid var(--card-border);
   border-radius: 12px;
@@ -276,6 +293,37 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+
+.stat-card-high {
+  background: var(--amber-bg);
+  border-color: transparent;
+}
+.stat-card-high::before { background: var(--amber); }
+.stat-card-high .stat-card-value { color: var(--amber); }
+.stat-card-high .stat-card-icon { color: var(--amber); }
+
+.stat-card-low {
+  background: var(--sage-bg);
+  border-color: transparent;
+}
+.stat-card-low::before { background: var(--sage); }
+.stat-card-low .stat-card-value { color: var(--sage); }
+.stat-card-low .stat-card-icon { color: var(--sage); }
+
+.stat-card-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0.6;
 }
 
 .stat-card-title {
@@ -469,12 +517,25 @@ input[type="text"] {
 
 .booking-card-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
 }
 
+.booking-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--amber-bg);
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
 .booking-name {
+  flex: 1;
   font-family: 'Fraunces', serif;
   font-style: italic;
   font-weight: 600;
@@ -592,6 +653,25 @@ input[type="text"] {
   padding-top: 8px;
 }
 
+.breakdown-subhead {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  margin: 14px 0 2px;
+}
+
+.breakdown-subhead:first-of-type { margin-top: 4px; }
+
+.breakdown-row.diff-row {
+  font-weight: 700;
+  background: var(--ivory);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 10px;
+}
+
 .breakdown-inputs {
   display: flex;
   gap: 10px;
@@ -662,7 +742,9 @@ input[type="text"] {
 }
 
 .signal-card-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 700;
   font-size: 15px;
@@ -672,6 +754,8 @@ input[type="text"] {
   color: var(--gold-soft);
   letter-spacing: 0.03em;
 }
+
+.signal-card-badge svg { flex-shrink: 0; }
 
 .signal-card-reason {
   font-family: 'Fraunces', serif;
@@ -799,7 +883,7 @@ input[type="text"] {
   border-radius: 10px;
 }
 
-.tab-icon { font-size: 18px; }
+.tab-icon { display: flex; }
 .tab-label { font-size: 10.5px; font-weight: 600; }
 
 .tab.active {

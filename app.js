@@ -16,6 +16,21 @@
   const CARATS = ["24K", "22K", "18K"];
   const GRAMS_PER_PAVAN = 8;
 
+  // Small inline line-icons (stroke="currentColor") so they inherit whatever
+  // color the wrapping element sets — no external image requests.
+  const ICONS = {
+    gift: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="11" rx="1.5"/><path d="M3 13h18"/><path d="M12 9v11"/><path d="M12 9C9.5 9 8 7.5 8 5.8 8 4.5 9 4 9.8 4 11 4 12 6 12 9Z"/><path d="M12 9c2.5 0 4-1.5 4-3.2C16 4.5 15 4 14.2 4 13 4 12 6 12 9Z"/></svg>',
+    up: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 10 11 14 15 20 8"/><path d="M14 8h6v6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 10 13 14 9 20 16"/><path d="M14 16h6v-6"/></svg>',
+    buy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
+    wait: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9"/><path d="M17 3c0 5-5 6-5 9s5 4 5 9"/></svg>',
+    hold: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"/><path d="M5 15h14"/></svg>',
+  };
+
+  function signalIcon(level) {
+    return level === "BUY" ? ICONS.buy : level === "WAIT" ? ICONS.wait : ICONS.hold;
+  }
+
   // Scraped daily by .github/workflows/scrape-rate.yml from a Kerala gold
   // rate aggregator (scripts/scrape-rate.mjs) — real 22K/24K/18K rates, no
   // client-side API calls or manual calibration needed.
@@ -297,7 +312,7 @@
 
     const signal = computeSignal(carat);
     const badge = document.getElementById("home-signal-badge");
-    badge.textContent = signal.label;
+    badge.innerHTML = `${signalIcon(signal.level)}<span>${signal.label}</span>`;
     badge.className = "signal-badge " + signal.level.toLowerCase();
     document.getElementById("home-signal-text").textContent = `${signal.reason} — position ${signal.position.toFixed(0)}% of the month's range`;
 
@@ -404,12 +419,12 @@
     });
   }
 
-  function computeBreakdown(booking) {
-    const goldValue = booking.weight * booking.rate;
-    const panikooli = goldValue * (booking.panikooli / 100);
-    const gst = (goldValue + panikooli) * (booking.gst / 100);
-    const total = goldValue + panikooli + gst;
-    return { goldValue, panikooli, gst, total };
+  function computeBreakdown(booking, rate) {
+    const goldValue = booking.weight * rate;
+    const makingCharge = goldValue * (booking.panikooli / 100);
+    const gst = (goldValue + makingCharge) * (booking.gst / 100);
+    const total = goldValue + makingCharge + gst;
+    return { goldValue, makingCharge, gst, total };
   }
 
   function renderBooking() {
@@ -425,12 +440,15 @@
       const diffPct = (diff / goldValueAtPurchase) * 100;
       const ahead = diff >= 0;
       const rateDiffCls = currentRate <= b.rate ? "value-negative" : "value-positive";
-      const breakdown = computeBreakdown(b);
+      const thenBreakdown = computeBreakdown(b, b.rate);
+      const nowBreakdown = computeBreakdown(b, currentRate);
+      const totalDiff = nowBreakdown.total - thenBreakdown.total;
       const buySignal = computeSignal(b.carat);
 
       return `
       <div class="booking-card" data-id="${b.id}">
         <div class="booking-card-head">
+          <span class="booking-icon">${ICONS.gift}</span>
           <span class="booking-name">${escapeHtml(b.name)}</span>
           <span class="booking-carat-tag">${b.carat}</span>
         </div>
@@ -439,7 +457,8 @@
         </div>
 
         <div class="compare-detail">
-          <div class="breakdown-row"><span>Rate then → now</span><span class="mono">${inr(b.rate)} → <span class="${rateDiffCls}">${inr(round0(currentRate))}</span></span></div>
+          <div class="breakdown-row"><span>Gram rate then → now</span><span class="mono">${inr(b.rate)} → <span class="${rateDiffCls}">${inr(round0(currentRate))}</span></span></div>
+          <div class="breakdown-row"><span>Pavan rate then → now</span><span class="mono">${inr(round0(b.rate * GRAMS_PER_PAVAN))} → <span class="${rateDiffCls}">${inr(round0(currentRate * GRAMS_PER_PAVAN))}</span></span></div>
           <div class="breakdown-row"><span>Gold value then → now</span><span class="mono">${inr(round0(goldValueAtPurchase))} → ${inr(round0(goldValueToday))}</span></div>
         </div>
 
@@ -449,7 +468,7 @@
         </div>
 
         <div class="booking-signal">
-          <span class="signal-badge ${buySignal.level.toLowerCase()}">${buySignal.label}</span>
+          <span class="signal-badge ${buySignal.level.toLowerCase()}">${signalIcon(buySignal.level)}<span>${buySignal.label}</span></span>
           <span class="booking-signal-text">Buying more ${b.carat} right now: ${buySignal.reason}</span>
         </div>
 
@@ -459,7 +478,7 @@
         <div class="breakdown" id="breakdown-${b.id}" hidden>
           <div class="breakdown-inputs">
             <div>
-              <label>Panikooli %</label>
+              <label>Making charge %</label>
               <input type="number" step="0.1" min="0" class="panikooli-input" data-id="${b.id}" value="${b.panikooli}">
             </div>
             <div>
@@ -467,10 +486,21 @@
               <input type="number" step="0.1" min="0" class="gst-input" data-id="${b.id}" value="${b.gst}">
             </div>
           </div>
-          <div class="breakdown-row"><span>Gold value (${b.weight.toFixed(3)}g × ${inr(b.rate)})</span><span class="mono">${inr(round0(breakdown.goldValue))}</span></div>
-          <div class="breakdown-row"><span>Panikooli (${b.panikooli}%)</span><span class="mono">${inr(round0(breakdown.panikooli))}</span></div>
-          <div class="breakdown-row"><span>GST (${b.gst}% on gold+panikooli)</span><span class="mono">${inr(round0(breakdown.gst))}</span></div>
-          <div class="breakdown-row total"><span>Total</span><span class="mono">${inr(round0(breakdown.total))}</span></div>
+
+          <p class="breakdown-subhead">At purchase — ${inr(b.rate)}/g</p>
+          <div class="breakdown-row"><span>Gold value (${b.weight.toFixed(3)}g × ${inr(b.rate)})</span><span class="mono">${inr(round0(thenBreakdown.goldValue))}</span></div>
+          <div class="breakdown-row"><span>Making charge (${b.panikooli}%)</span><span class="mono">${inr(round0(thenBreakdown.makingCharge))}</span></div>
+          <div class="breakdown-row"><span>GST (${b.gst}% on gold+making charge)</span><span class="mono">${inr(round0(thenBreakdown.gst))}</span></div>
+          <div class="breakdown-row total"><span>Total then</span><span class="mono">${inr(round0(thenBreakdown.total))}</span></div>
+
+          <p class="breakdown-subhead">Final price at today's rate — ${inr(round0(currentRate))}/g</p>
+          <div class="breakdown-row"><span>Gold value (${b.weight.toFixed(3)}g × ${inr(round0(currentRate))})</span><span class="mono">${inr(round0(nowBreakdown.goldValue))}</span></div>
+          <div class="breakdown-row"><span>Making charge (${b.panikooli}%)</span><span class="mono">${inr(round0(nowBreakdown.makingCharge))}</span></div>
+          <div class="breakdown-row"><span>GST (${b.gst}% on gold+making charge)</span><span class="mono">${inr(round0(nowBreakdown.gst))}</span></div>
+          <div class="breakdown-row total"><span>Total today</span><span class="mono">${inr(round0(nowBreakdown.total))}</span></div>
+
+          <div class="breakdown-row diff-row"><span>Difference (then → today)</span><span class="mono ${totalDiff <= 0 ? "value-negative" : "value-positive"}">${totalDiff <= 0 ? "−" : "+"}${inr(Math.abs(round0(totalDiff)))}</span></div>
+
           <p class="breakdown-note">GST-on-making-charges conventions vary by jeweller and invoice in Kerala — treat this as an estimate to sanity-check against the actual bill, not gospel.</p>
           <button class="delete-booking-btn" data-delete="${b.id}">Delete this booking</button>
         </div>
@@ -552,7 +582,7 @@
     const signal = computeSignal(carat);
     const card = document.getElementById("signal-card");
     const badge = document.getElementById("signal-card-badge");
-    badge.textContent = `${signal.label} · ${carat}`;
+    badge.innerHTML = `${signalIcon(signal.level)}<span>${signal.label} · ${carat}</span>`;
 
     document.getElementById("signal-card-reason").textContent =
       signal.level === "BUY" ? `Now looks like a reasonable time to buy ${carat} — the rate is ${signal.reason}.` :

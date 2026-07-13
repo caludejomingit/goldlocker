@@ -25,6 +25,8 @@
     buy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
     wait: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M7 3c0 5 5 6 5 9s-5 4-5 9"/><path d="M17 3c0 5-5 6-5 9s5 4 5 9"/></svg>',
     hold: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14"/><path d="M5 15h14"/></svg>',
+    coin: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M9 9.5c0-1 1-1.8 3-1.8s3 .6 3 1.6c0 2.4-6 1-6 3.4 0 1 1 1.8 3 1.8s3-.8 3-1.8"/></svg>',
+    coinStack: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v5c0 1.5 3 2.8 7 2.8s7-1.3 7-2.8V6"/><path d="M5 11v5c0 1.5 3 2.8 7 2.8s7-1.3 7-2.8v-5"/></svg>',
   };
 
   function signalIcon(level) {
@@ -498,7 +500,6 @@
       const diff = goldValueToday - goldValueAtPurchase;
       const diffPct = (diff / goldValueAtPurchase) * 100;
       const ahead = diff >= 0;
-      const rateDiffCls = currentRate <= b.rate ? "value-negative" : "value-positive";
       const thenBreakdown = computeBreakdown(b, b.rate);
       const nowBreakdown = computeBreakdown(b, currentRate);
       const totalDiff = nowBreakdown.total - thenBreakdown.total;
@@ -516,20 +517,20 @@
         </div>
 
         <div class="booking-hero ${ahead ? "ahead" : "behind"}">
-          <div class="booking-hero-rates">
-            <div class="bhr-col">
-              <span class="bhr-label">Then</span>
-              <span class="bhr-value mono">${inr(b.rate)}<small>/g</small></span>
-            </div>
-            <span class="booking-hero-arrow">→</span>
-            <div class="bhr-col">
-              <span class="bhr-label">Now</span>
-              <span class="bhr-value mono">${inr(round0(currentRate))}<small>/g</small></span>
-            </div>
+          <div class="booking-rate-row">
+            <span class="brr-icon">${ICONS.coin}</span>
+            <span class="brr-label">Gram</span>
+            <span class="brr-value mono">${inr(b.rate)} <span class="brr-arrow">${ahead ? ICONS.up : ICONS.down}</span> ${inr(round0(currentRate))}</span>
+          </div>
+          <div class="booking-rate-row">
+            <span class="brr-icon">${ICONS.coinStack}</span>
+            <span class="brr-label">Pavan <small>(8g)</small></span>
+            <span class="brr-value mono">${inr(round0(b.rate * GRAMS_PER_PAVAN))} <span class="brr-arrow">${ahead ? ICONS.up : ICONS.down}</span> ${inr(round0(currentRate * GRAMS_PER_PAVAN))}</span>
           </div>
           <div class="booking-hero-diff">
-            <span>${ahead ? "You're ahead by" : "Amount is down by"}</span>
-            <strong class="mono">${inr(Math.abs(round0(diff)))} (${pct(Math.abs(diffPct))})</strong>
+            <span>Your ${b.weight.toFixed(3)}g is worth</span>
+            <strong class="mono">${inr(Math.abs(round0(diff)))} ${ahead ? "more" : "less"}</strong>
+            <span>than you paid — ${ahead ? "up" : "down"} ${Math.abs(diffPct).toFixed(2)}%</span>
           </div>
         </div>
 
@@ -542,7 +543,6 @@
 
         <button class="breakdown-toggle" data-toggle="${b.id}">Full price details ▾</button>
         <div class="breakdown" id="breakdown-${b.id}" hidden>
-          <div class="breakdown-row"><span>Pavan rate then → now</span><span class="mono">${inr(round0(b.rate * GRAMS_PER_PAVAN))} → <span class="${rateDiffCls}">${inr(round0(currentRate * GRAMS_PER_PAVAN))}</span></span></div>
           <div class="breakdown-row"><span>Gold value then → now</span><span class="mono">${inr(round0(goldValueAtPurchase))} → ${inr(round0(goldValueToday))}</span></div>
 
           <div class="breakdown-inputs">

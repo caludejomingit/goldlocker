@@ -158,6 +158,14 @@ main {
   color: var(--gold-soft);
 }
 
+.rate-board-date {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 13.5px;
+  color: rgba(251,246,236,0.85);
+  margin-top: 6px;
+}
+
 .refresh-btn {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.18);

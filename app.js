@@ -97,6 +97,12 @@
     });
   }
 
+  function formatTodayLong() {
+    return new Date().toLocaleDateString("en-IN", {
+      weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    });
+  }
+
   // ---------- Persistence ----------
 
   function loadSettings() {
@@ -261,7 +267,14 @@
   let dataMeta = { source: null, fetchedAt: null, fromCache: false, live: false };
 
   async function loadLiveFromSource() {
-    const res = await fetch(`${SOURCE_PAGE_URL}?t=${Date.now()}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    let res;
+    try {
+      res = await fetch(`${SOURCE_PAGE_URL}?t=${Date.now()}`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!res.ok) throw new Error(`bad response ${res.status}`);
     const html = await res.text();
     history = parseKeralaRateHtml(html);
@@ -362,6 +375,7 @@
     const rate = rateFor(latest, carat);
 
     document.getElementById("home-carat-label").textContent = `${carat} GOLD · KOTHAMANGALAM`;
+    document.getElementById("home-today-date").textContent = formatTodayLong();
     document.getElementById("home-rate-gram").textContent = rate ? round0(rate).toLocaleString("en-IN") : "----";
     document.getElementById("home-rate-pavan").textContent = rate ? `${inr(round0(rate * GRAMS_PER_PAVAN))} / pavan (8g)` : "-- / pavan (8g)";
 
@@ -377,13 +391,14 @@
 
     const latestDate = latest ? formatDateLong(latest.date) : "--";
     const asOf = dataMeta.fetchedAt ? formatTime(new Date(dataMeta.fetchedAt)) : latestDate;
+    const isTodayRate = latest && latest.date === todayKey();
     const updatedEl = document.getElementById("home-updated");
     if (dataMeta.fromCache) {
       updatedEl.textContent = `${latestDate}'s rate — offline, showing last synced data`;
     } else if (dataMeta.live) {
-      updatedEl.textContent = `Live · fetched just now at ${asOf}`;
+      updatedEl.textContent = isTodayRate ? `Today's rate · fetched live at ${asOf}` : `Latest available is ${latestDate} · fetched live at ${asOf}`;
     } else {
-      updatedEl.textContent = `${latestDate} · synced ${asOf}`;
+      updatedEl.textContent = isTodayRate ? `Today's rate · synced ${asOf}` : `Latest available is ${latestDate} · synced ${asOf}`;
     }
 
     const signal = computeSignal(carat);
@@ -994,7 +1009,7 @@
     wirePush();
     registerServiceWorker();
 
-    refreshData(false);
+    refreshData(true);
   }
 
   document.addEventListener("DOMContentLoaded", init);

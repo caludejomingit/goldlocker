@@ -1,14 +1,8 @@
 {
   "source": "https://keralagoldrates.com/today-22k-gold-rate-kerala/",
   "note": "Kerala state-wide gold rate. Kothamangalam-specific rates aren't separately published; jeweller making charges (not the base metal rate) are what vary by city.",
-  "fetchedAt": "2026-11-24T13:29:33.959Z",
+  "fetchedAt": "2026-11-25T12:31:04.844Z",
   "history": [
-    {
-      "date": "2026-10-25",
-      "rate18K": 10694,
-      "rate22K": 13070,
-      "rate24K": 14258
-    },
     {
       "date": "2026-10-26",
       "rate18K": 10706,
@@ -188,6 +182,12 @@
       "rate18K": 9585,
       "rate22K": 11715,
       "rate24K": 12780
+    },
+    {
+      "date": "2026-11-25",
+      "rate18K": 9245,
+      "rate22K": 11300,
+      "rate24K": 12327
     }
   ]
 }
